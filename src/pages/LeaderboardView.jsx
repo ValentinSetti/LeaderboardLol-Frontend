@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 
 export default function LeaderboardView() {
   const { id } = useParams();
@@ -7,6 +7,10 @@ export default function LeaderboardView() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [copying, setCopying] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newTag, setNewTag] = useState('');
 
   // Traemos la URL de la variable de entorno
   const API_URL = import.meta.env.VITE_API_URL;
@@ -32,6 +36,50 @@ export default function LeaderboardView() {
       });
   };
 
+  const handleUpdateList = async (updatedAmigos) => {
+    setIsSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/leaderboard/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id, 
+          titulo: data.titulo, 
+          amigos: updatedAmigos 
+        })
+      });
+      
+      if (res.ok) {
+        fetchData();
+        setIsEditing(false);
+        setNewName('');
+        setNewTag('');
+      }
+    } catch (err) {
+      console.error("Error updating list:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeletePlayer = (gameName, tagLine) => {
+    const updatedAmigos = data.jugadores
+      .filter(p => !(p.gameName === gameName && p.tagLine === tagLine))
+      .map(p => ({ gameName: p.gameName, tagLine: p.tagLine }));
+    
+    handleUpdateList(updatedAmigos);
+  };
+
+  const handleAddPlayer = (e) => {
+    e.preventDefault();
+    if (!newName || !newTag) return;
+
+    const currentAmigos = data.jugadores.map(p => ({ gameName: p.gameName, tagLine: p.tagLine }));
+    const updatedAmigos = [...currentAmigos, { gameName: newName, tagLine: newTag }];
+    
+    handleUpdateList(updatedAmigos);
+  };
+
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -50,8 +98,14 @@ export default function LeaderboardView() {
   );
 
   if (!data || data.error) return (
-    <div className="min-h-screen bg-[#0a0a0c] text-white flex items-center justify-center">
-      Lista no encontrada
+    <div className="min-h-screen bg-[#0a0a0c] text-white flex flex-col items-center justify-center gap-6">
+      <p className="text-xl font-bold opacity-50">Lista no encontrada</p>
+      <Link 
+        to="/"
+        className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all"
+      >
+        Volver al Inicio
+      </Link>
     </div>
   );
 
@@ -59,6 +113,19 @@ export default function LeaderboardView() {
     <div className="min-h-screen bg-gradient-to-b from-[#0a0a0c] via-[#0d0d12] to-[#111116] text-gray-200 p-4 md:p-10 font-sans selection:bg-blue-500/30">
       <div className="max-w-6xl mx-auto">
         
+        {/* Botón Volver */}
+        <Link 
+          to="/"
+          className="inline-flex items-center gap-2 text-gray-500 hover:text-white transition-all mb-8 group"
+        >
+          <div className="p-2 rounded-lg bg-white/5 group-hover:bg-blue-600 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </div>
+          <span className="text-[11px] font-black uppercase tracking-[0.2em]">Nueva Lista</span>
+        </Link>
+
         {/* Cabecera Principal */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
           <div className="flex flex-col gap-3">
@@ -89,25 +156,66 @@ export default function LeaderboardView() {
             )}
           </div>
 
-          <button 
-            onClick={fetchData}
-            disabled={loading}
-            className="group flex items-center gap-3 bg-[#1a1a20] hover:bg-blue-600 border border-white/5 hover:border-blue-400 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 disabled:opacity-50"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {loading ? 'Sincronizando...' : 'Refrescar Ranking'}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button 
+              onClick={() => setIsEditing(!isEditing)}
+              className={`flex items-center gap-3 border border-white/5 px-6 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 ${isEditing ? 'bg-red-500/20 text-red-500 border-red-500/50' : 'bg-[#1a1a20] text-gray-400 hover:text-white hover:bg-white/5'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={isEditing ? "M6 18L18 6M6 6l12 12" : "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
+              </svg>
+              {isEditing ? 'Cancelar Edición' : 'Editar Jugadores'}
+            </button>
+
+            <button 
+              onClick={fetchData}
+              disabled={loading}
+              className="group flex items-center gap-3 bg-[#1a1a20] hover:bg-blue-600 border border-white/5 hover:border-blue-400 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 disabled:opacity-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {loading ? 'Sincronizando...' : 'Refrescar Ranking'}
+            </button>
+          </div>
         </div>
+
+        {/* Formulario Agregar Jugador */}
+        {isEditing && (
+          <div className="mb-8 bg-blue-600/5 border border-blue-500/20 p-6 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-500">
+            <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] mb-4">Agregar Nuevo Invocador</h3>
+            <form onSubmit={handleAddPlayer} className="flex flex-col md:flex-row gap-3">
+              <input 
+                placeholder="Nombre de Invocador"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                className="flex-1 bg-[#0a0a0c] border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500 outline-none transition-colors"
+              />
+              <input 
+                placeholder="TAG"
+                value={newTag}
+                onChange={e => setNewTag(e.target.value)}
+                className="w-full md:w-24 bg-[#0a0a0c] border border-white/10 rounded-xl p-3 text-sm focus:border-blue-500 outline-none transition-colors"
+              />
+              <button 
+                type="submit"
+                disabled={isSaving || !newName || !newTag}
+                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-8 py-3 rounded-xl font-black text-[11px] uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20"
+              >
+                {isSaving ? 'Agregando...' : 'Agregar'}
+              </button>
+            </form>
+          </div>
+        )}
         
         {/* Cuerpo de la Tabla */}
         <div className="bg-[#111114]/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-md shadow-2xl">
-          <div className="grid grid-cols-[50px_2fr_1.5fr_100px] gap-4 px-8 py-5 text-[11px] font-black text-gray-500 uppercase tracking-[0.25em] bg-white/[0.02] border-b border-white/5">
+          <div className={`grid ${isEditing ? 'grid-cols-[50px_2fr_1.5fr_100px_50px]' : 'grid-cols-[50px_2fr_1.5fr_100px]'} gap-4 px-8 py-5 text-[11px] font-black text-gray-500 uppercase tracking-[0.25em] bg-white/[0.02] border-b border-white/5`}>
             <span>#</span>
             <span>Invocador</span>
             <span>Rango Actual</span>
             <span className="text-right">Rendimiento</span>
+            {isEditing && <span className="text-right"></span>}
           </div>
 
           <div className="p-2 space-y-1">
@@ -118,7 +226,7 @@ export default function LeaderboardView() {
               return (
                 <div 
                   key={index} 
-                  className="grid grid-cols-[50px_2fr_1.5fr_100px] gap-4 items-center hover:bg-white/[0.03] p-5 px-6 rounded-2xl transition-all duration-300 group relative overflow-hidden"
+                  className={`grid ${isEditing ? 'grid-cols-[50px_2fr_1.5fr_100px_50px]' : 'grid-cols-[50px_2fr_1.5fr_100px]'} gap-4 items-center hover:bg-white/[0.03] p-5 px-6 rounded-2xl transition-all duration-300 group relative overflow-hidden`}
                 >
                   <div className="text-xl font-black text-gray-700 group-hover:text-blue-500 transition-colors italic pl-2">
                     {index + 1}
@@ -170,6 +278,21 @@ export default function LeaderboardView() {
                         <span className="text-[11px] font-black text-gray-400 italic">{player.winrate}%</span>
                     </div>
                   </div>
+
+                  {isEditing && (
+                    <div className="flex justify-end">
+                      <button 
+                        onClick={() => handleDeletePlayer(player.gameName, player.tagLine)}
+                        disabled={isSaving}
+                        className="p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all disabled:opacity-50"
+                        title="Eliminar Jugador"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
