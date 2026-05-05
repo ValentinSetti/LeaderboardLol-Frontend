@@ -7,9 +7,11 @@ export default function LeaderboardView() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [copying, setCopying] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingPlayers, setIsEditingPlayers] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newTitle, setNewTitle] = useState('');
   const [newTag, setNewTag] = useState('');
 
   // Traemos la URL de la variable de entorno
@@ -22,6 +24,7 @@ export default function LeaderboardView() {
       .then(res => res.json())
       .then(json => {
         setData(json);
+        setNewTitle(json.titulo || '');
         
         const ahora = new Date();
         const horas = String(ahora.getHours()).padStart(2, '0');
@@ -51,12 +54,34 @@ export default function LeaderboardView() {
       
       if (res.ok) {
         fetchData();
-        setIsEditing(false);
+        setIsEditingPlayers(false);
         setNewName('');
         setNewTag('');
       }
     } catch (err) {
       console.error("Error updating list:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateTitle = async () => {
+    if (!newTitle) return;
+    setIsSaving(true);
+    try {
+      const currentAmigos = data.jugadores.map(p => ({ gameName: p.gameName, tagLine: p.tagLine }));
+      const res = await fetch(`${API_URL}/api/leaderboard/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, titulo: newTitle, amigos: currentAmigos })
+      });
+
+      if (res.ok) {
+        fetchData();
+        setIsEditingTitle(false);
+      }
+    } catch (err) {
+      console.error("Error updating title:", err);
     } finally {
       setIsSaving(false);
     }
@@ -129,23 +154,52 @@ export default function LeaderboardView() {
         {/* Cabecera Principal */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 md:mb-12 gap-4 md:gap-6">
           <div className="flex flex-col gap-2 md:gap-3">
-            <div className="flex items-start md:items-center gap-3 md:gap-5">
-              <h1 className="text-2xl md:text-4xl lg:text-5xl font-black text-white uppercase tracking-tighter italic border-l-4 md:border-l-8 border-blue-600 pl-3 md:pl-6 drop-shadow-sm">
-                {data.titulo}
-              </h1>
-              <button 
-                onClick={copyLink}
-                className={`p-2 md:p-2.5 rounded-lg md:rounded-xl border transition-all duration-300 ${copying ? 'border-green-500 text-green-500 bg-green-500/5' : 'border-white/5 text-gray-500 hover:bg-white/5 hover:text-white hover:border-white/20'}`}
-              >
-                {copying ? (
-                  <span className="text-[8px] md:text-[10px] font-black uppercase px-1">¡Copiado!</span>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            {isEditingTitle ? (
+              <div className="flex items-center gap-3 md:gap-5 w-full">
+                <input
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  className="flex-1 bg-[#0a0a0c] border border-white/10 rounded-lg md:rounded-xl p-2 md:p-3 text-2xl md:text-4xl font-black text-white uppercase tracking-tighter italic focus:border-blue-500 outline-none transition-colors"
+                />
+                <button
+                  onClick={handleUpdateTitle}
+                  disabled={isSaving || !newTitle}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-3 py-2 rounded-lg md:rounded-xl font-black text-[10px] md:text-[11px] uppercase tracking-widest transition-all"
+                >
+                  {isSaving ? 'Guardando...' : 'Guardar título'}
+                </button>
+                <button
+                  onClick={copyLink}
+                  className={`p-2 md:p-2.5 rounded-lg md:rounded-xl border transition-all duration-300 ${copying ? 'border-green-500 text-green-500 bg-green-500/5' : 'border-white/5 text-gray-500 hover:bg-white/5 hover:text-white hover:border-white/20'}`}
+                >
+                  {copying ? (
+                    <span className="text-[8px] md:text-[10px] font-black uppercase px-1">¡Copiado!</span>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-start md:items-center gap-3 md:gap-5">
+                <h1 className="text-2xl md:text-4xl lg:text-5xl font-black text-white uppercase tracking-tighter italic border-l-4 md:border-l-8 border-blue-600 pl-3 md:pl-6 drop-shadow-sm">
+                  {data.titulo}
+                </h1>
+                <button 
+                  onClick={copyLink}
+                  className={`p-2 md:p-2.5 rounded-lg md:rounded-xl border transition-all duration-300 ${copying ? 'border-green-500 text-green-500 bg-green-500/5' : 'border-white/5 text-gray-500 hover:bg-white/5 hover:text-white hover:border-white/20'}`}
+                >
+                  {copying ? (
+                    <span className="text-[8px] md:text-[10px] font-black uppercase px-1">¡Copiado!</span>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 md:h-5 md:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
             {lastUpdated && (
               <div className="flex items-center gap-2 md:pl-6 md:pl-8">
                 <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-500 rounded-full animate-pulse"></span>
@@ -156,32 +210,42 @@ export default function LeaderboardView() {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-2 md:gap-3">
-            <button 
-              onClick={() => setIsEditing(!isEditing)}
-              className={`flex items-center gap-2 md:gap-3 border border-white/5 px-3 md:px-6 py-2 md:py-4 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 ${isEditing ? 'bg-red-500/20 text-red-500 border-red-500/50' : 'bg-[#1a1a20] text-gray-400 hover:text-white hover:bg-white/5'}`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 md:h-4 md:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={isEditing ? "M6 18L18 6M6 6l12 12" : "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
-              </svg>
-              {isEditing ? 'Cancelar' : 'Editar'}
-            </button>
+            <div className="flex flex-wrap gap-2 md:gap-3">
+              <button
+                onClick={() => setIsEditingPlayers(!isEditingPlayers)}
+                className={`flex items-center gap-2 md:gap-3 border border-white/5 px-3 md:px-6 py-2 md:py-4 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 ${isEditingPlayers ? 'bg-red-500/20 text-red-500 border-red-500/50' : 'bg-[#1a1a20] text-gray-400 hover:text-white hover:bg-white/5'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 md:h-4 md:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={isEditingPlayers ? "M6 18L18 6M6 6l12 12" : "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
+                </svg>
+                {isEditingPlayers ? 'Cancelar lista' : 'Editar lista'}
+              </button>
 
-            <button 
-              onClick={fetchData}
-              disabled={loading}
-              className="group flex items-center gap-2 md:gap-3 bg-[#1a1a20] hover:bg-blue-600 border border-white/5 hover:border-blue-400 text-white px-4 md:px-8 py-2 md:py-4 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 disabled:opacity-50"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 md:h-4 md:w-4 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {loading ? 'Sincronizando...' : 'Refrescar'}
-            </button>
-          </div>
+              <button
+                onClick={() => setIsEditingTitle(!isEditingTitle)}
+                className={`flex items-center gap-2 md:gap-3 border border-white/5 px-3 md:px-6 py-2 md:py-4 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 ${isEditingTitle ? 'bg-red-500/20 text-red-500 border-red-500/50' : 'bg-[#1a1a20] text-gray-400 hover:text-white hover:bg-white/5'}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 md:h-4 md:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={isEditingTitle ? "M6 18L18 6M6 6l12 12" : "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
+                </svg>
+                {isEditingTitle ? 'Cancelar título' : 'Editar título'}
+              </button>
+
+              <button
+                onClick={fetchData}
+                disabled={loading}
+                className="group flex items-center gap-2 md:gap-3 bg-[#1a1a20] hover:bg-blue-600 border border-white/5 hover:border-blue-400 text-white px-4 md:px-8 py-2 md:py-4 rounded-xl md:rounded-2xl font-black text-[9px] md:text-[11px] uppercase tracking-[0.15em] transition-all shadow-xl active:scale-95 disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 md:h-4 md:w-4 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {loading ? 'Sincronizando...' : 'Refrescar'}
+              </button>
+            </div>
         </div>
 
         {/* Formulario Agregar Jugador */}
-        {isEditing && (
+        {isEditingPlayers && (
           <div className="mb-4 md:mb-8 bg-blue-600/5 border border-blue-500/20 p-3 md:p-6 rounded-2xl md:rounded-3xl animate-in fade-in slide-in-from-top-4 duration-500">
             <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] mb-3 md:mb-4">Agregar Nuevo Invocador</h3>
             <form onSubmit={handleAddPlayer} className="flex flex-col md:flex-row gap-2 md:gap-3">
@@ -216,7 +280,7 @@ export default function LeaderboardView() {
             <span>Invocador</span>
             <span>Rango Actual</span>
             <span className="text-right">Rendimiento</span>
-            {isEditing && <span></span>}
+            {isEditingPlayers && <span></span>}
           </div>
 
           <div className="p-1 md:p-2 space-y-1">
@@ -265,7 +329,7 @@ export default function LeaderboardView() {
 </div>
                     </div>
 
-                    {isEditing && (
+                    {isEditingPlayers && (
                       <div className="flex justify-end pt-1">
                         <button 
                           onClick={() => handleDeletePlayer(player.gameName, player.tagLine)}
@@ -332,7 +396,7 @@ export default function LeaderboardView() {
                     </div>
                   </div>
 
-                  {isEditing && (
+                  {isEditingPlayers && (
                     <div className="hidden md:flex justify-end">
                       <button 
                         onClick={() => handleDeletePlayer(player.gameName, player.tagLine)}
