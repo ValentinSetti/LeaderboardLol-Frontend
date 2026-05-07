@@ -115,6 +115,51 @@ export default function LeaderboardView() {
     setTimeout(() => setCopying(false), 2000);
   };
 
+  // Convierte el `player` a un LP absoluto para poder comparar entre tiers y divisiones.
+  const computeAbsoluteLP = (player) => {
+    if (!player) return 0;
+    let tier = (player.tier || '').toString().toUpperCase().trim();
+    const rankRaw = player.rank || player.division || '';
+
+    // Soportar nombres en español e inglés
+    const spanishMap = {
+      'HIERRO': 'IRON', 'BRONCE': 'BRONZE', 'PLATA': 'SILVER', 'ORO': 'GOLD',
+      'PLATINO': 'PLATINUM', 'ESMERALDA': 'EMERALD', 'DIAMANTE': 'DIAMOND',
+      'MAESTRO': 'MASTER', 'GRANDMAESTRE': 'GRANDMASTER', 'GRANDMASTER': 'GRANDMASTER'
+    };
+    if (spanishMap[tier]) tier = spanishMap[tier];
+
+    const tiersOrder = ['IRON','BRONZE','SILVER','GOLD','PLATINUM','EMERALD','DIAMOND','MASTER','GRANDMASTER','CHALLENGER'];
+    let tierIndex = tiersOrder.indexOf(tier);
+    if (tierIndex === -1) tierIndex = 0;
+
+    const romanMap = { 'I':1, 'II':2, 'III':3, 'IV':4 };
+    let rankNum = null;
+    if (typeof rankRaw === 'number') rankNum = rankRaw;
+    else if (/^\d+$/.test(String(rankRaw).trim())) rankNum = Number(String(rankRaw).trim());
+    else {
+      const r = String(rankRaw).toUpperCase().trim();
+      if (romanMap[r]) rankNum = romanMap[r];
+    }
+
+    // Cada división tiene 100 LP y hay 4 divisiones por tier => 400 LP por tier
+    // Para tiers desde IRON..DIAMOND (indices 0..6) aplican 4 divisiones.
+    let divisionOffset = 0;
+    if (tierIndex <= 6) {
+      if (!rankNum) rankNum = 4; // si falta la división, asumimos la más baja (IV)
+      if (rankNum >= 1 && rankNum <= 4) {
+        // División 4 = 0, 3 = 100, 2 = 200, 1 = 300
+        divisionOffset = (4 - rankNum) * 100;
+      }
+    } else {
+      // MASTER en adelante no tienen divisiones, solo LP
+      divisionOffset = 0;
+    }
+
+    const lpValue = Number(player.lp) || 0;
+    return tierIndex * 400 + divisionOffset + lpValue;
+  };
+
   if (loading && !data) return (
     <div className="min-h-screen bg-[#0a0a0c] text-white flex flex-col items-center justify-center font-bold gap-4">
       <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -275,10 +320,11 @@ export default function LeaderboardView() {
         {/* Cuerpo de la Tabla */}
         <div className="bg-[#111114]/40 border border-white/5 rounded-2xl md:rounded-3xl overflow-hidden backdrop-blur-md shadow-2xl">
           {/* Encabezado */}
-          <div className="hidden md:grid md:grid-cols-[50px_minmax(180px,2fr)_1.5fr_100px_50px] gap-4 px-8 py-5 text-[11px] font-black text-gray-500 uppercase tracking-[0.25em] bg-white/[0.02] border-b border-white/5">
+          <div className="hidden md:grid md:grid-cols-[50px_minmax(180px,2fr)_1.5fr_100px_100px_50px] gap-4 px-8 py-5 text-[11px] font-black text-gray-500 uppercase tracking-[0.25em] bg-white/[0.02] border-b border-white/5">
             <span>#</span>
             <span>Invocador</span>
             <span>Rango Actual</span>
+            <span className="text-center">Dif. LP</span>
             <span className="text-right">Rendimiento</span>
             {isEditingPlayers && <span></span>}
           </div>
@@ -288,10 +334,14 @@ export default function LeaderboardView() {
               const isApexTier = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(player.tier.toUpperCase());
               const opggUrl = `https://www.op.gg/summoners/las/${encodeURIComponent(player.gameName)}-${player.tagLine}`;
 
+              const abs = computeAbsoluteLP(player);
+              const prevAbs = index === 0 ? null : computeAbsoluteLP(data.jugadores[index - 1]);
+              const diff = prevAbs === null ? null : abs - prevAbs;
+
               return (
                 <div 
                   key={index} 
-                  className="flex flex-col gap-3 md:grid md:grid-cols-[50px_minmax(180px,2fr)_1.5fr_100px_50px] md:gap-4 md:items-center hover:bg-white/[0.03] p-3 md:p-5 rounded-xl md:rounded-2xl transition-all duration-300 group"
+                  className="flex flex-col gap-3 md:grid md:grid-cols-[50px_minmax(180px,2fr)_1.5fr_100px_100px_50px] md:gap-4 md:items-center hover:bg-white/[0.03] p-3 md:p-5 rounded-xl md:rounded-2xl transition-all duration-300 group"
                 >
                   {/* Móvil: Card completa por jugador */}
                   <div className="md:hidden space-y-3">
@@ -309,6 +359,11 @@ export default function LeaderboardView() {
                       <div className="text-right shrink-0">
                         <div className="text-xs font-black text-white uppercase">{player.tier} {!isApexTier && player.rank}</div>
                         <div className="text-[10px] text-blue-500 font-black">{player.lp} LP</div>
+                        {index !== 0 && (
+                          <div className="text-[10px] text-gray-400 mt-1 font-black">
+                            {diff === null ? '—' : `${diff > 0 ? '+' : ''}${diff} LP`}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -381,6 +436,17 @@ export default function LeaderboardView() {
                         {player.lp} LP
                       </span>
                     </div>
+                  </div>
+
+                  {/* Columna: Diferencia de LP respecto al jugador de arriba */}
+                  <div className="hidden md:flex flex-col items-center">
+                    {diff === null ? (
+                      <span className="text-gray-500 font-black">—</span>
+                    ) : (
+                      <span className={`${diff <= 0 ? 'text-red-400' : 'text-green-400'} font-black`}>
+                        {diff > 0 ? '+' : ''}{diff} LP
+                      </span>
+                    )}
                   </div>
 
                   <div className="hidden md:flex flex-col items-end pr-2">
